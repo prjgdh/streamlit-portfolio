@@ -594,3 +594,4 @@ def main():
             board_with_tokens = draw_player_tokens(board_image, st.session_state.player_tokens)
             
             # Convert to base64 for displaying
+            #######
