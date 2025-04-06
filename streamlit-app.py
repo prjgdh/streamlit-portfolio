@@ -500,7 +500,9 @@ st.sidebar.info(
     
     For more information, contact:  
     [prj.gdh@gmail.com](mailto:prj.gdh@gmail.com)
+    
     About This APP-> 
+    
     This Streamlit application offers comprehensive data analysis capabilities, enabling users to upload CSV data, explore through intuitive visualizations, and build predictive models with minimal coding. It serves as an excellent tool for data scientists to quickly analyze datasets, business analysts seeking insights without complex programming, educators demonstrating data concepts, and decision-makers who need to transform raw data into actionable intelligence through an accessible interface.
     """
 )
