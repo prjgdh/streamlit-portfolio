@@ -543,15 +543,14 @@ def main():
             color_name = PLAYER_NAMES[i]
             color_hex = PLAYER_COLORS[i]
             
-            # Create colored circle for the player
-            colored_circle = f"<div style='display: inline-block; height: 15px; width: 15px; border-radius: 50%; background-color: {color_hex};'></div>"
+            # Display colored circle with player info using markdown
+            st.markdown(f"<div style='display: inline-block; height: 15px; width: 15px; border-radius: 50%; background-color: {color_hex};'></div> Player {i+1} ({color_name})", unsafe_allow_html=True)
             
             # Input for player name
             st.text_input(
-                f"{colored_circle} Player {i+1} ({color_name})",
+                f"Enter name for Player {i+1}",
                 key=f"player_{i}_name",
-                value=f"Player {i+1}",
-                unsafe_allow_html=True
+                value=f"Player {i+1}"
             )
         
         # Start the game
