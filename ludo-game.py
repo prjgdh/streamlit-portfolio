@@ -17,18 +17,18 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 3rem;
-        font-weight: 700;
-        color: #4527A0;
-        text-align: center;
-        margin-bottom: 20px;
+        font-size: 3rem !important;
+        font-weight: 700 !important;
+        color: #4527A0 !important;
+        text-align: center !important;
+        margin-bottom: 20px !important;
     }
     .subheader {
-        font-size: 1.5rem;
-        font-weight: 500;
-        color: #5E35B1;
-        text-align: center;
-        margin-bottom: 30px;
+        font-size: 1.5rem !important;
+        font-weight: 500 !important;
+        color: #5E35B1 !important;
+        text-align: center !important;
+        margin-bottom: 30px !important;
     }
     .player-box {
         background-color: #f0f2f6;
@@ -86,6 +86,13 @@ st.markdown("""
     .warning {
         background-color: #fff8e1;
         color: #ff8f00;
+    }
+    .colored-circle {
+        display: inline-block;
+        height: 15px;
+        width: 15px;
+        border-radius: 50%;
+        margin-right: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -379,6 +386,7 @@ def start_game():
     
     st.session_state.notification = "Game started! Roll the dice to begin."
     st.session_state.notification_type = "info"
+    # We don't use st.experimental_rerun() anymore
 
 # Roll the dice
 def roll_dice():
@@ -544,9 +552,9 @@ def main():
             color_hex = PLAYER_COLORS[i]
             
             # Display colored circle with player info using markdown
-            st.markdown(f"<div style='display: inline-block; height: 15px; width: 15px; border-radius: 50%; background-color: {color_hex};'></div> Player {i+1} ({color_name})", unsafe_allow_html=True)
+            st.markdown(f"<div><span class='colored-circle' style='background-color: {color_hex};'></span> Player {i+1} ({color_name})</div>", unsafe_allow_html=True)
             
-            # Input for player name
+            # Input for player name (separate from the HTML)
             st.text_input(
                 f"Enter name for Player {i+1}",
                 key=f"player_{i}_name",
@@ -556,7 +564,7 @@ def main():
         # Start the game
         if st.button("Start Game"):
             start_game()
-            st.experimental_rerun()
+            # We don't use st.experimental_rerun() anymore
     
     # Game board and controls
     else:
@@ -571,7 +579,7 @@ def main():
             
             if st.button("Play Again"):
                 restart_game()
-                st.experimental_rerun()
+                # We don't use st.experimental_rerun() anymore
                 
             return
         
@@ -586,122 +594,3 @@ def main():
             board_with_tokens = draw_player_tokens(board_image, st.session_state.player_tokens)
             
             # Convert to base64 for displaying
-            board_base64 = base64.b64encode(board_with_tokens).decode()
-            
-            # Display the board
-            st.markdown(f"<img src='data:image/png;base64,{board_base64}' style='width: 100%;'>", unsafe_allow_html=True)
-        
-        with col2:
-            # Current player info
-            current_player = st.session_state.current_player
-            player_name = st.session_state.player_names[current_player]
-            player_color = PLAYER_COLORS[current_player]
-            
-            st.markdown(f"<div class='player-box active-player'>", unsafe_allow_html=True)
-            st.markdown(f"### Current Player: {player_name}")
-            st.markdown(f"<div style='height: 20px; width: 20px; border-radius: 50%; background-color: {player_color}; display: inline-block;'></div> {PLAYER_NAMES[current_player]}", unsafe_allow_html=True)
-            
-            # Dice section
-            st.markdown("### Dice")
-            
-            if st.session_state.show_dice:
-                dice_value = st.session_state.dice_value
-                st.markdown(f"<div class='dice'>{DICE_FACES[dice_value]}</div>", unsafe_allow_html=True)
-                st.markdown(f"You rolled a {dice_value}")
-            else:
-                st.markdown("<div class='dice'>?</div>", unsafe_allow_html=True)
-            
-            # Game controls
-            st.markdown("### Game Controls")
-            
-            # Roll dice button
-            roll_disabled = st.session_state.token_moved and st.session_state.dice_value != 6
-            if st.button("Roll Dice", disabled=roll_disabled):
-                roll_dice()
-                st.experimental_rerun()
-            
-            # Token selection
-            if st.session_state.show_dice and not st.session_state.token_moved:
-                st.markdown("### Select Token to Move")
-                
-                # Create buttons for each token
-                player_tokens = st.session_state.player_tokens[player_color]
-                
-                for token_idx, position in enumerate(player_tokens):
-                    # Determine if token can be moved
-                    can_move = False
-                    
-                    if position == -1:  # Token is in starting area
-                        if st.session_state.dice_value == 6:
-                            can_move = True
-                    else:  # Token is on the board
-                        if position + st.session_state.dice_value < len(PATH[PLAYER_NAMES[current_player]]):
-                            can_move = True
-                    
-                    # Create button with appropriate state
-                    btn_label = f"Token {token_idx + 1}"
-                    if position == -1:
-                        btn_label += " (Home)"
-                    elif position == len(PATH[PLAYER_NAMES[current_player]]) - 1:
-                        btn_label += " (Finished)"
-                        can_move = False
-                    
-                    if st.button(btn_label, disabled=not can_move, key=f"token_{token_idx}"):
-                        move_token(token_idx)
-                        st.experimental_rerun()
-            
-            # Next turn button
-            if st.session_state.token_moved or (st.session_state.show_dice and not any(pos == -1 for pos in st.session_state.player_tokens[player_color])):
-                if st.button("Next Turn"):
-                    next_turn()
-                    st.experimental_rerun()
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-            
-            # Player stats
-            st.markdown("### All Players")
-            
-            for i in range(st.session_state.num_players):
-                player_name = st.session_state.player_names[i]
-                player_color = PLAYER_COLORS[i]
-                color_name = PLAYER_NAMES[i]
-                player_tokens = st.session_state.player_tokens[player_color]
-                
-                # Count finished tokens
-                finished_tokens = sum(1 for pos in player_tokens if pos == len(PATH[color_name]) - 1)
-                
-                # Determine if this is the current player
-                is_current = i == current_player
-                div_class = "player-box active-player" if is_current else "player-box"
-                
-                st.markdown(f"<div class='{div_class}'>", unsafe_allow_html=True)
-                st.markdown(f"**{player_name}** <div style='height: 15px; width: 15px; border-radius: 50%; background-color: {player_color}; display: inline-block;'></div>", unsafe_allow_html=True)
-                st.markdown(f"Tokens at home: {sum(1 for pos in player_tokens if pos == -1)}")
-                st.markdown(f"Tokens on board: {sum(1 for pos in player_tokens if pos >= 0 and pos < len(PATH[color_name]) - 1)}")
-                st.markdown(f"Tokens finished: {finished_tokens}")
-                st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Game instructions
-        with st.expander("Game Instructions"):
-            st.markdown("""
-            ### How to Play Ludo
-            
-            1. **Starting:** You need to roll a 6 to move a token out of the home area.
-            2. **Movement:** Move your tokens around the board based on your dice roll.
-            3. **Rolling a 6:** If you roll a 6, you get another turn after moving a token.
-            4. **Winning:** The first player to get all 4 tokens to the center wins!
-            
-            **Controls:**
-            - Click "Roll Dice" to roll
-            - Select a token to move
-            - Click "Next Turn" to end your turn
-            """)
-        
-        # Restart game button
-        if st.button("Restart Game"):
-            restart_game()
-            st.experimental_rerun()
-
-# Run the main function
-if __name__ == "__main__":
-    main()
