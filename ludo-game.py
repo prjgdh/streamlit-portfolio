@@ -1,7 +1,7 @@
 import streamlit as st
 import random
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import io
 import base64
 
@@ -92,6 +92,53 @@ st.markdown("""
         width: 15px;
         border-radius: 50%;
         margin-right: 5px;
+    }
+    .btn-primary {
+        background-color: #4527A0;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 16px;
+        font-size: 16px;
+        cursor: pointer;
+        margin: 5px 0;
+        display: block;
+        width: 100%;
+    }
+    .btn-success {
+        background-color: #2e7d32;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 16px;
+        font-size: 16px;
+        cursor: pointer;
+        margin: 5px 0;
+        display: block;
+        width: 100%;
+    }
+    .btn-warning {
+        background-color: #ff8f00;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 8px 16px;
+        font-size: 16px;
+        cursor: pointer;
+        margin: 5px 0;
+        display: block;
+        width: 100%;
+    }
+    .board-container {
+        display: flex;
+        justify-content: center;
+        margin: 20px 0;
+    }
+    .token-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -243,6 +290,8 @@ def create_board_image():
     for spot in safe_spots:
         x, y = spot
         draw.ellipse([(x * cell_size, y * cell_size), ((x + 1) * cell_size, (y + 1) * cell_size)], fill=(220, 220, 220))
+        # Add "S" for safe
+        draw.text(((x + 0.45) * cell_size, (y + 0.35) * cell_size), "S", fill=(0, 0, 0))
 
     # Draw home stretch paths
     # Red
@@ -303,7 +352,7 @@ def draw_player_tokens(board_image_bytes, player_tokens):
                     (center_x + token_radius, center_y + token_radius)
                 ], fill=color_rgb, outline=(0, 0, 0))
                 
-                draw.text((center_x, center_y), str(token_idx + 1), fill=(255, 255, 255))
+                draw.text((center_x - token_radius // 3, center_y - token_radius // 3), str(token_idx + 1), fill=(255, 255, 255))
                 
             elif position >= 0:
                 # Get the corresponding player path
@@ -332,7 +381,7 @@ def draw_player_tokens(board_image_bytes, player_tokens):
                     ], fill=color_rgb, outline=(0, 0, 0))
                     
                     # Add token number
-                    draw.text((center_x, center_y), str(token_idx + 1), fill=(255, 255, 255))
+                    draw.text((center_x - token_radius // 3, center_y - token_radius // 3), str(token_idx + 1), fill=(255, 255, 255))
     
     # Convert the image back to bytes
     img_bytes = io.BytesIO()
@@ -342,20 +391,34 @@ def draw_player_tokens(board_image_bytes, player_tokens):
 
 # Initialize the game state
 def initialize_game_state():
-    st.session_state.player_names = []
-    st.session_state.num_players = 0
-    st.session_state.game_started = False
-    st.session_state.current_player = 0
-    st.session_state.dice_value = 0
-    st.session_state.player_tokens = {}
-    st.session_state.game_over = False
-    st.session_state.winner = None
-    st.session_state.last_action = None
-    st.session_state.selected_token = None
-    st.session_state.token_moved = False
-    st.session_state.show_dice = False
-    st.session_state.notification = None
-    st.session_state.notification_type = "info"
+    if 'player_names' not in st.session_state:
+        st.session_state.player_names = []
+    if 'num_players' not in st.session_state:
+        st.session_state.num_players = 0
+    if 'game_started' not in st.session_state:
+        st.session_state.game_started = False
+    if 'current_player' not in st.session_state:
+        st.session_state.current_player = 0
+    if 'dice_value' not in st.session_state:
+        st.session_state.dice_value = 0
+    if 'player_tokens' not in st.session_state:
+        st.session_state.player_tokens = {}
+    if 'game_over' not in st.session_state:
+        st.session_state.game_over = False
+    if 'winner' not in st.session_state:
+        st.session_state.winner = None
+    if 'last_action' not in st.session_state:
+        st.session_state.last_action = None
+    if 'selected_token' not in st.session_state:
+        st.session_state.selected_token = None
+    if 'token_moved' not in st.session_state:
+        st.session_state.token_moved = False
+    if 'show_dice' not in st.session_state:
+        st.session_state.show_dice = False
+    if 'notification' not in st.session_state:
+        st.session_state.notification = None
+    if 'notification_type' not in st.session_state:
+        st.session_state.notification_type = "info"
     
 # Start a new game
 def start_game():
@@ -363,7 +426,7 @@ def start_game():
     player_names = []
     
     for i in range(num_players):
-        name = st.session_state[f"player_{i}_name"]
+        name = st.session_state.get(f"player_{i}_name", f"Player {i+1}")
         if not name:
             name = f"Player {i+1}"
         player_names.append(name)
@@ -385,7 +448,6 @@ def start_game():
     
     st.session_state.notification = "Game started! Roll the dice to begin."
     st.session_state.notification_type = "info"
-    st.experimental_rerun()  # Added this line to force a rerun and refresh the UI
 
 # Roll the dice
 def roll_dice():
@@ -426,8 +488,6 @@ def roll_dice():
     else:
         st.session_state.notification = f"Select a token to move."
         st.session_state.notification_type = "info"
-    
-    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Move a token
 def move_token(token_idx):
@@ -482,8 +542,6 @@ def move_token(token_idx):
             st.session_state.notification = f"Cannot move token {token_idx + 1} beyond the end."
             st.session_state.notification_type = "warning"
             return
-    
-    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Next player's turn
 def next_turn():
@@ -505,7 +563,6 @@ def next_turn():
         st.session_state.dice_value = 0
         st.session_state.show_dice = False
         st.session_state.token_moved = False
-        st.experimental_rerun()  # Added this line to refresh the UI
         return
     
     # Move to next player
@@ -515,19 +572,17 @@ def next_turn():
     st.session_state.token_moved = False
     st.session_state.notification = f"{st.session_state.player_names[st.session_state.current_player]}'s turn. Roll the dice."
     st.session_state.notification_type = "info"
-    
-    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Restart the game
 def restart_game():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     initialize_game_state()
-    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Main app
 def main():
     # Initialize session state if not already done
-    if 'game_started' not in st.session_state:
-        initialize_game_state()
+    initialize_game_state()
     
     # Title
     st.markdown("<h1 class='main-header'>🎲 Streamlit Ludo Game</h1>", unsafe_allow_html=True)
@@ -543,6 +598,7 @@ def main():
         - Each player has 4 tokens
         - Roll a 6 to move a token out of the starting area
         - Move your tokens around the board based on dice rolls
+        - Roll a 6 to get an extra turn
         - The first player to get all their tokens to the center wins!
         """)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -550,27 +606,33 @@ def main():
         st.markdown("### Game Setup")
         
         # Player selection
-        st.session_state.num_players_input = st.slider("Number of Players", min_value=2, max_value=4, value=4)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.session_state.num_players_input = st.slider("Number of Players", min_value=2, max_value=4, value=4)
         
         # Player names
         st.markdown("### Enter Player Names")
+        cols = st.columns(2)
         for i in range(st.session_state.num_players_input):
             color_name = PLAYER_NAMES[i]
             color_hex = PLAYER_COLORS[i]
             
-            # Display colored circle with player info using markdown
-            st.markdown(f"<div><span class='colored-circle' style='background-color: {color_hex};'></span> Player {i+1} ({color_name})</div>", unsafe_allow_html=True)
-            
-            # Input for player name (separate from the HTML)
-            st.text_input(
-                f"Enter name for Player {i+1}",
-                key=f"player_{i}_name",
-                value=f"Player {i+1}"
-            )
+            with cols[i % 2]:
+                # Display colored circle with player info using markdown
+                st.markdown(f"<div><span class='colored-circle' style='background-color: {color_hex};'></span> Player {i+1} ({color_name})</div>", unsafe_allow_html=True)
+                
+                # Input for player name
+                st.text_input(
+                    f"Enter name for Player {i+1}",
+                    key=f"player_{i}_name",
+                    value=f"Player {i+1}"
+                )
         
         # Start the game
-        if st.button("Start Game"):
-            start_game()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("Start Game", use_container_width=True, type="primary"):
+                start_game()
     
     # Game board and controls
     else:
@@ -583,8 +645,10 @@ def main():
         if st.session_state.game_over:
             st.markdown(f"<h2 class='winner-text'>🏆 {st.session_state.winner} wins! 🏆</h2>", unsafe_allow_html=True)
             
-            if st.button("Play Again"):
-                restart_game()
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("Play Again", use_container_width=True, type="primary"):
+                    restart_game()
                 
             return
         
@@ -603,7 +667,7 @@ def main():
             
             # Display the board
             st.markdown(
-                f'<div style="display: flex; justify-content: center;"><img src="data:image/png;base64,{encoded_image}" style="max-width: 100%;" /></div>',
+                f'<div class="board-container"><img src="data:image/png;base64,{encoded_image}" style="max-width: 100%; border: 3px solid #333; border-radius: 10px;" /></div>',
                 unsafe_allow_html=True
             )
             
@@ -627,7 +691,7 @@ def main():
             
             # Roll dice button
             if not st.session_state.token_moved:
-                if st.button("Roll Dice"):
+                if st.button("Roll Dice", use_container_width=True, type="primary"):
                     roll_dice()
             
             # Token selection
@@ -638,31 +702,87 @@ def main():
                 current_player_color = PLAYER_COLORS[current_player_idx]
                 tokens = st.session_state.player_tokens[current_player_color]
                 
-                # Create buttons for each token
+                # Create token grid
+                st.markdown("<div class='token-grid'>", unsafe_allow_html=True)
+                cols = st.columns(2)
+                
                 for i, position in enumerate(tokens):
                     # Only show buttons for tokens that can be moved
                     # If token is in home (-1), need a 6 to move out
                     # If token is on board, can't move past the end
                     can_move = False
+                    button_col = cols[i % 2]
                     
                     if position == -1 and st.session_state.dice_value == 6:
                         can_move = True
+                        label = f"Token {i+1} (Home)"
                     elif position >= 0 and position + st.session_state.dice_value < len(PATH[PLAYER_NAMES[current_player_idx]]):
                         can_move = True
+                        if position == len(PATH[PLAYER_NAMES[current_player_idx]]) - st.session_state.dice_value - 1:
+                            label = f"Token {i+1} (To Finish!)"
+                        else:
+                            label = f"Token {i+1} (Pos: {position})"
+                    else:
+                        label = f"Token {i+1} (Can't Move)"
                     
-                    if can_move:
-                        if st.button(f"Move Token {i+1}", key=f"token_{i}"):
-                            move_token(i)
+                    with button_col:
+                        if can_move:
+                            if st.button(label, key=f"token_{i}", use_container_width=True, type="success"):
+                                move_token(i)
+                        else:
+                            st.button(label, key=f"token_{i}", use_container_width=True, disabled=True)
+                
+                st.markdown("</div>", unsafe_allow_html=True)
             
             # Next turn button
             if st.session_state.token_moved or (st.session_state.show_dice and not any(pos + st.session_state.dice_value < len(PATH[PLAYER_NAMES[current_player_idx]]) for pos in st.session_state.player_tokens[PLAYER_COLORS[current_player_idx]] if pos >= 0) and not (st.session_state.dice_value == 6 and -1 in st.session_state.player_tokens[PLAYER_COLORS[current_player_idx]])):
-                if st.button("Next Turn"):
+                if st.button("Next Turn", use_container_width=True, type="primary"):
                     next_turn()
             
             # Restart game button
             st.markdown("---")
-            if st.button("Restart Game"):
+            if st.button("Restart Game", use_container_width=True, type="warning"):
                 restart_game()
+            
+            # Game stats
+            st.markdown("### Game Statistics")
+            
+            # Show tokens in home and finished for each player
+            for i in range(st.session_state.num_players):
+                player_name = st.session_state.player_names[i]
+                player_color = PLAYER_COLORS[i]
+                tokens = st.session_state.player_tokens.get(player_color, [-1, -1, -1, -1])
+                
+                tokens_home = sum(1 for pos in tokens if pos == -1)
+                tokens_finished = sum(1 for pos in tokens if pos == len(PATH[PLAYER_NAMES[i]]) - 1)
+                tokens_playing = 4 - tokens_home - tokens_finished
+                
+                # Create progress bar
+                progress_html = f"""
+                <div style="margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                        <span class='colored-circle' style='background-color: {player_color};'></span>
+                        <b>{player_name}</b>
+                    </div>
+                    <div style="display: flex; width: 100%; height: 20px; border-radius: 5px; overflow: hidden;">
+                        <div style="width: {tokens_home/4*100}%; background-color: #f0f0f0; display: flex; justify-content: center; align-items: center;">
+                            {tokens_home}
+                        </div>
+                        <div style="width: {tokens_playing/4*100}%; background-color: {player_color}; display: flex; justify-content: center; align-items: center; color: white;">
+                            {tokens_playing}
+                        </div>
+                        <div style="width: {tokens_finished/4*100}%; background-color: #4CAF50; display: flex; justify-content: center; align-items: center; color: white;">
+                            {tokens_finished}
+                        </div>
+                    </div>
+                    <div style="display: flex; width: 100%; font-size: 0.8em; margin-top: 2px;">
+                        <div style="width: {tokens_home/4*100}%;">Home</div>
+                        <div style="width: {tokens_playing/4*100}%;">Playing</div>
+                        <div style="width: {tokens_finished/4*100}%;">Finished</div>
+                    </div>
+                </div>
+                """
+                st.markdown(progress_html, unsafe_allow_html=True)
 
 # Run the main app
 if __name__ == "__main__":
