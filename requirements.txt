@@ -6,3 +6,4 @@ seaborn>=0.12.2
 scikit-learn>=1.2.2
 plotly>=5.14.1
 statsmodels>=0.13.5
+pillow>=9.0.0
