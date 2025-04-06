@@ -499,6 +499,6 @@ st.sidebar.info(
     This is a data science demo app created with Streamlit.
     
     For more information, contact:  
-    [youremail@example.com](mailto:youremail@example.com)
+    [prj.gdh@gmail.com](mailto:prj.gdh@gmail.com)
     """
 )
