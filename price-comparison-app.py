@@ -1,10 +1,7 @@
 import streamlit as st
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
 import time
 import random
-import re
 from urllib.parse import quote
 
 # Configure the page
@@ -84,55 +81,26 @@ def get_affiliate_link(site, product_url):
         separator = "&" if "?" in product_url else "?"
         return f"{product_url}{separator}affid={affiliate_ids.get(site, 'generic')}"
 
-# Mock scraper function (in production, you'd implement actual scraping)
-def search_products(query, sites=None):
-    """
-    This function simulates scraping product data from various e-commerce sites.
-    In production, you would implement actual web scraping or API calls.
-    """
-    # Simulate API delay
-    time.sleep(1)
-    
-    # Mock product data
-    mock_products = [
-        {"site": "Amazon", "name": f"Samsung 8 Kg Washing Machine - Fully Automatic", "price": 24999, "rating": 4.3, 
+# Mock product data - This simulates what would be fetched by web scraping
+def get_mock_products():
+    return [
+        {"site": "Amazon", "name": "Samsung 8 Kg Washing Machine - Fully Automatic", "price": 24999, "rating": 4.3, 
          "url": "https://www.amazon.in/product/B08XXXXX", "image": "https://m.media-amazon.com/images/placeholder.jpg"},
-        {"site": "Flipkart", "name": f"Samsung 8 Kg Fully-Automatic Front Load", "price": 23499, "rating": 4.5, 
+        {"site": "Flipkart", "name": "Samsung 8 Kg Fully-Automatic Front Load", "price": 23499, "rating": 4.5, 
          "url": "https://www.flipkart.com/product/p/XXXXX", "image": "https://rukminim1.flixcart.com/placeholder.jpg"},
-        {"site": "Snapdeal", "name": f"Samsung 8Kg Front Load Fully Automatic", "price": 25990, "rating": 4.2, 
+        {"site": "Snapdeal", "name": "Samsung 8Kg Front Load Fully Automatic", "price": 25990, "rating": 4.2, 
          "url": "https://www.snapdeal.com/product/XXXXX", "image": "https://n3.sdlcdn.com/placeholder.jpg"},
-        {"site": "Amazon", "name": f"LG 7 Kg Washing Machine - Fully Automatic", "price": 22490, "rating": 4.4, 
+        {"site": "Amazon", "name": "LG 7 Kg Washing Machine - Fully Automatic", "price": 22490, "rating": 4.4, 
          "url": "https://www.amazon.in/product/B08YYYYY", "image": "https://m.media-amazon.com/images/placeholder2.jpg"},
-        {"site": "Flipkart", "name": f"LG 7 Kg 5 Star Inverter Front Load", "price": 21999, "rating": 4.6, 
+        {"site": "Flipkart", "name": "LG 7 Kg 5 Star Inverter Front Load", "price": 21999, "rating": 4.6, 
          "url": "https://www.flipkart.com/product/p/YYYYY", "image": "https://rukminim1.flixcart.com/placeholder2.jpg"},
-        {"site": "Croma", "name": f"LG 7 Kg Smart Inverter Washer", "price": 23990, "rating": 4.3, 
+        {"site": "Croma", "name": "LG 7 Kg Smart Inverter Washer", "price": 23990, "rating": 4.3, 
          "url": "https://www.croma.com/product/ZZZZZ", "image": "https://cdn.croma.com/placeholder.jpg"},
-        {"site": "Reliance Digital", "name": f"Whirlpool 7.5 Kg 5 Star Royal", "price": 22499, "rating": 4.1, 
+        {"site": "Reliance Digital", "name": "Whirlpool 7.5 Kg 5 Star Royal", "price": 22499, "rating": 4.1, 
          "url": "https://www.reliancedigital.in/product/AAAAA", "image": "https://www.reliancedigital.in/placeholder.jpg"},
-        {"site": "Amazon", "name": f"Whirlpool 7.5 Kg 5 Star Royal Plus", "price": 22990, "rating": 4.3, 
+        {"site": "Amazon", "name": "Whirlpool 7.5 Kg 5 Star Royal Plus", "price": 22990, "rating": 4.3, 
          "url": "https://www.amazon.in/product/B08AAAAA", "image": "https://m.media-amazon.com/images/placeholder3.jpg"},
     ]
-    
-    # Filter by selected sites
-    if sites:
-        mock_products = [p for p in mock_products if p["site"] in sites]
-    
-    # Filter by price range
-    mock_products = [p for p in mock_products if price_range[0] <= p["price"] <= price_range[1]]
-    
-    # Sort products
-    if sort_by == "Price: Low to High":
-        mock_products.sort(key=lambda x: x["price"])
-    elif sort_by == "Price: High to Low":
-        mock_products.sort(key=lambda x: x["price"], reverse=True)
-    elif sort_by == "Popularity":
-        mock_products.sort(key=lambda x: x["rating"], reverse=True)
-    
-    # Add affiliate links
-    for product in mock_products:
-        product["affiliate_url"] = get_affiliate_link(product["site"], product["url"])
-        
-    return mock_products
 
 # Search functionality
 search_query = st.text_input("What are you looking for?", "washing machine")
@@ -143,12 +111,32 @@ if st.button("Search", type="primary") or search_query:
     st.subheader("Search Results")
     
     with st.spinner("Searching across multiple sites..."):
-        products = search_products(search_query, include_sites)
+        # In a real application, you would implement web scraping here
+        # For this demo, we'll use the mock data
+        all_products = get_mock_products()
+        
+        # Filter by selected sites
+        products = [p for p in all_products if p["site"] in include_sites]
+        
+        # Filter by price range
+        products = [p for p in products if price_range[0] <= p["price"] <= price_range[1]]
         
         # Filter by selected brands
         if brands:
             products = [p for p in products if any(brand.lower() in p["name"].lower() for brand in brands)]
+            
+        # Sort products
+        if sort_by == "Price: Low to High":
+            products.sort(key=lambda x: x["price"])
+        elif sort_by == "Price: High to Low":
+            products.sort(key=lambda x: x["price"], reverse=True)
+        elif sort_by == "Popularity":
+            products.sort(key=lambda x: x["rating"], reverse=True)
         
+        # Add affiliate links
+        for product in products:
+            product["affiliate_url"] = get_affiliate_link(product["site"], product["url"])
+    
     if not products:
         st.warning("No products found matching your criteria. Try adjusting your filters.")
     else:
