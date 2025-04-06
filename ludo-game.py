@@ -1,6 +1,5 @@
 import streamlit as st
 import random
-import time
 import numpy as np
 from PIL import Image, ImageDraw
 import io
@@ -386,7 +385,7 @@ def start_game():
     
     st.session_state.notification = "Game started! Roll the dice to begin."
     st.session_state.notification_type = "info"
-    # We don't use st.experimental_rerun() anymore
+    st.experimental_rerun()  # Added this line to force a rerun and refresh the UI
 
 # Roll the dice
 def roll_dice():
@@ -427,6 +426,8 @@ def roll_dice():
     else:
         st.session_state.notification = f"Select a token to move."
         st.session_state.notification_type = "info"
+    
+    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Move a token
 def move_token(token_idx):
@@ -481,6 +482,8 @@ def move_token(token_idx):
             st.session_state.notification = f"Cannot move token {token_idx + 1} beyond the end."
             st.session_state.notification_type = "warning"
             return
+    
+    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Next player's turn
 def next_turn():
@@ -502,6 +505,7 @@ def next_turn():
         st.session_state.dice_value = 0
         st.session_state.show_dice = False
         st.session_state.token_moved = False
+        st.experimental_rerun()  # Added this line to refresh the UI
         return
     
     # Move to next player
@@ -511,10 +515,13 @@ def next_turn():
     st.session_state.token_moved = False
     st.session_state.notification = f"{st.session_state.player_names[st.session_state.current_player]}'s turn. Roll the dice."
     st.session_state.notification_type = "info"
+    
+    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Restart the game
 def restart_game():
     initialize_game_state()
+    st.experimental_rerun()  # Added this line to refresh the UI
 
 # Main app
 def main():
@@ -564,7 +571,6 @@ def main():
         # Start the game
         if st.button("Start Game"):
             start_game()
-            # We don't use st.experimental_rerun() anymore
     
     # Game board and controls
     else:
@@ -579,7 +585,6 @@ def main():
             
             if st.button("Play Again"):
                 restart_game()
-                # We don't use st.experimental_rerun() anymore
                 
             return
         
@@ -594,4 +599,71 @@ def main():
             board_with_tokens = draw_player_tokens(board_image, st.session_state.player_tokens)
             
             # Convert to base64 for displaying
-            #######
+            encoded_image = base64.b64encode(board_with_tokens).decode()
+            
+            # Display the board
+            st.markdown(
+                f'<div style="display: flex; justify-content: center;"><img src="data:image/png;base64,{encoded_image}" style="max-width: 100%;" /></div>',
+                unsafe_allow_html=True
+            )
+            
+        with col2:
+            # Display current player
+            current_player_idx = st.session_state.current_player
+            player_name = st.session_state.player_names[current_player_idx]
+            player_color = PLAYER_COLORS[current_player_idx]
+            
+            st.markdown(f"## Current Player")
+            st.markdown(f"<div class='player-box active-player'><span class='colored-circle' style='background-color: {player_color};'></span> <b>{player_name}</b></div>", unsafe_allow_html=True)
+            
+            # Dice roll
+            if st.session_state.show_dice:
+                dice_face = DICE_FACES[st.session_state.dice_value]
+                st.markdown(f"<div class='dice'>{dice_face}</div>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center;'>You rolled a {st.session_state.dice_value}</p>", unsafe_allow_html=True)
+            
+            # Game controls
+            st.markdown("### Game Controls")
+            
+            # Roll dice button
+            if not st.session_state.token_moved:
+                if st.button("Roll Dice"):
+                    roll_dice()
+            
+            # Token selection
+            if st.session_state.show_dice and not st.session_state.token_moved:
+                st.markdown("### Select Token to Move")
+                
+                # Get current player's tokens
+                current_player_color = PLAYER_COLORS[current_player_idx]
+                tokens = st.session_state.player_tokens[current_player_color]
+                
+                # Create buttons for each token
+                for i, position in enumerate(tokens):
+                    # Only show buttons for tokens that can be moved
+                    # If token is in home (-1), need a 6 to move out
+                    # If token is on board, can't move past the end
+                    can_move = False
+                    
+                    if position == -1 and st.session_state.dice_value == 6:
+                        can_move = True
+                    elif position >= 0 and position + st.session_state.dice_value < len(PATH[PLAYER_NAMES[current_player_idx]]):
+                        can_move = True
+                    
+                    if can_move:
+                        if st.button(f"Move Token {i+1}", key=f"token_{i}"):
+                            move_token(i)
+            
+            # Next turn button
+            if st.session_state.token_moved or (st.session_state.show_dice and not any(pos + st.session_state.dice_value < len(PATH[PLAYER_NAMES[current_player_idx]]) for pos in st.session_state.player_tokens[PLAYER_COLORS[current_player_idx]] if pos >= 0) and not (st.session_state.dice_value == 6 and -1 in st.session_state.player_tokens[PLAYER_COLORS[current_player_idx]])):
+                if st.button("Next Turn"):
+                    next_turn()
+            
+            # Restart game button
+            st.markdown("---")
+            if st.button("Restart Game"):
+                restart_game()
+
+# Run the main app
+if __name__ == "__main__":
+    main()
