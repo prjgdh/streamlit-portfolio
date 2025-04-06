@@ -1,7 +1,7 @@
 import streamlit as st
 import random
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import io
 import base64
 
@@ -22,13 +22,6 @@ st.markdown("""
         text-align: center !important;
         margin-bottom: 20px !important;
     }
-    .subheader {
-        font-size: 1.5rem !important;
-        font-weight: 500 !important;
-        color: #5E35B1 !important;
-        text-align: center !important;
-        margin-bottom: 30px !important;
-    }
     .player-box {
         background-color: #f0f2f6;
         border-radius: 10px;
@@ -43,12 +36,6 @@ st.markdown("""
         font-size: 4rem;
         text-align: center;
     }
-    .player-token {
-        height: 20px;
-        width: 20px;
-        border-radius: 50%;
-        display: inline-block;
-    }
     .instructions {
         background-color: #f9f9f9;
         padding: 15px;
@@ -60,12 +47,6 @@ st.markdown("""
         font-weight: 700;
         color: #4CAF50;
         text-align: center;
-        margin: 20px 0;
-    }
-    .game-controls {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
         margin: 20px 0;
     }
     .notification {
@@ -93,52 +74,10 @@ st.markdown("""
         border-radius: 50%;
         margin-right: 5px;
     }
-    .btn-primary {
-        background-color: #4527A0;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        padding: 8px 16px;
-        font-size: 16px;
-        cursor: pointer;
-        margin: 5px 0;
-        display: block;
-        width: 100%;
-    }
-    .btn-success {
-        background-color: #2e7d32;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        padding: 8px 16px;
-        font-size: 16px;
-        cursor: pointer;
-        margin: 5px 0;
-        display: block;
-        width: 100%;
-    }
-    .btn-warning {
-        background-color: #ff8f00;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        padding: 8px 16px;
-        font-size: 16px;
-        cursor: pointer;
-        margin: 5px 0;
-        display: block;
-        width: 100%;
-    }
     .board-container {
         display: flex;
         justify-content: center;
         margin: 20px 0;
-    }
-    .token-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-top: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -290,8 +229,6 @@ def create_board_image():
     for spot in safe_spots:
         x, y = spot
         draw.ellipse([(x * cell_size, y * cell_size), ((x + 1) * cell_size, (y + 1) * cell_size)], fill=(220, 220, 220))
-        # Add "S" for safe
-        draw.text(((x + 0.45) * cell_size, (y + 0.35) * cell_size), "S", fill=(0, 0, 0))
 
     # Draw home stretch paths
     # Red
@@ -407,10 +344,6 @@ def initialize_game_state():
         st.session_state.game_over = False
     if 'winner' not in st.session_state:
         st.session_state.winner = None
-    if 'last_action' not in st.session_state:
-        st.session_state.last_action = None
-    if 'selected_token' not in st.session_state:
-        st.session_state.selected_token = None
     if 'token_moved' not in st.session_state:
         st.session_state.token_moved = False
     if 'show_dice' not in st.session_state:
@@ -460,7 +393,6 @@ def roll_dice():
     st.session_state.dice_value = random.randint(1, 6)
     st.session_state.show_dice = True
     st.session_state.token_moved = False
-    st.session_state.selected_token = None
     
     # Check if the player can move any tokens
     current_player = st.session_state.current_player
@@ -631,7 +563,7 @@ def main():
         # Start the game
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("Start Game", use_container_width=True, type="primary"):
+            if st.button("Start Game", use_container_width=True):
                 start_game()
     
     # Game board and controls
@@ -647,7 +579,7 @@ def main():
             
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                if st.button("Play Again", use_container_width=True, type="primary"):
+                if st.button("Play Again", use_container_width=True):
                     restart_game()
                 
             return
@@ -691,7 +623,7 @@ def main():
             
             # Roll dice button
             if not st.session_state.token_moved:
-                if st.button("Roll Dice", use_container_width=True, type="primary"):
+                if st.button("Roll Dice", use_container_width=True):
                     roll_dice()
             
             # Token selection
@@ -703,7 +635,6 @@ def main():
                 tokens = st.session_state.player_tokens[current_player_color]
                 
                 # Create token grid
-                st.markdown("<div class='token-grid'>", unsafe_allow_html=True)
                 cols = st.columns(2)
                 
                 for i, position in enumerate(tokens):
@@ -727,21 +658,19 @@ def main():
                     
                     with button_col:
                         if can_move:
-                            if st.button(label, key=f"token_{i}", use_container_width=True, type="success"):
+                            if st.button(label, key=f"token_{i}", use_container_width=True):
                                 move_token(i)
                         else:
                             st.button(label, key=f"token_{i}", use_container_width=True, disabled=True)
-                
-                st.markdown("</div>", unsafe_allow_html=True)
             
             # Next turn button
             if st.session_state.token_moved or (st.session_state.show_dice and not any(pos + st.session_state.dice_value < len(PATH[PLAYER_NAMES[current_player_idx]]) for pos in st.session_state.player_tokens[PLAYER_COLORS[current_player_idx]] if pos >= 0) and not (st.session_state.dice_value == 6 and -1 in st.session_state.player_tokens[PLAYER_COLORS[current_player_idx]])):
-                if st.button("Next Turn", use_container_width=True, type="primary"):
+                if st.button("Next Turn", use_container_width=True):
                     next_turn()
             
             # Restart game button
             st.markdown("---")
-            if st.button("Restart Game", use_container_width=True, type="warning"):
+            if st.button("Restart Game", use_container_width=True):
                 restart_game()
             
             # Game stats
