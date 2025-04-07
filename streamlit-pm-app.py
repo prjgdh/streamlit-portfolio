@@ -1,370 +1,402 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
-import datetime
-import random
-import string
 import hashlib
 import json
 import os
 import io
 import base64
+import random
+import string
+from datetime import datetime, timedelta
 from pathlib import Path
 
-# Set page config
-st.set_page_config(
-    page_title="Project Management App",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Configuration
+USER_DATA_FILE = "pm_users.json"
+MAX_PROJECTS_PER_USER = 50
+SESSION_TIMEOUT = 1800  # 30 minutes
 
-# CSS styling
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1E88E5;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        border-bottom: 3px solid #0D47A1;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 20px;
-        margin: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .gantt-container {
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 15px;
-        margin-top: 20px;
-    }
-    .stTabs [aria-selected="true"] {
-        background: #1E88E5 !important;
-        color: white !important;
-    }
-    .weekend { background-color: #f8f9fa !important; }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
+# Initialize paths
+Path(USER_DATA_FILE).touch(exist_ok=True)
 
-# Authentication System
+# --- Authentication System ---
 class AuthSystem:
     def __init__(self):
-        self.users_file = "pm_users.json"
-        Path(self.users_file).touch(exist_ok=True)
+        self.users = self._load_users()
         
     def _load_users(self):
-        with open(self.users_file, 'r') as f:
-            return json.loads(f.read() or "{}")
+        try:
+            with open(USER_DATA_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+            
+    def _save_users(self):
+        with open(USER_DATA_FILE, 'w') as f:
+            json.dump(self.users, f)
     
-    def _save_users(self, users):
-        with open(self.users_file, 'w') as f:
-            json.dump(users, f)
+    def _hash(self, text):
+        return hashlib.sha256(text.encode()).hexdigest()
     
-    def register_user(self, username, password):
-        users = self._load_users()
-        if username in users:
-            return False, "Username exists"
-        users[username] = {
-            'password': self._hash_password(password),
+    def create_user(self, username):
+        if username in self.users:
+            return False, "User exists"
+        password = self._generate_password()
+        self.users[username] = {
+            'password': self._hash(password),
             'projects': {},
-            'created_at': datetime.datetime.now().isoformat()
+            'created': datetime.now().isoformat()
         }
-        self._save_users(users)
-        return True, "Registered successfully"
+        self._save_users()
+        return True, password
     
-    def authenticate_user(self, username, password):
-        users = self._load_users()
-        user = users.get(username)
-        if not user or user['password'] != self._hash_password(password):
-            return False, "Invalid credentials"
-        return True, "Login successful"
+    def authenticate(self, username, password):
+        user = self.users.get(username)
+        if not user or user['password'] != self._hash(password):
+            return False
+        return True
     
-    def _hash_password(self, password):
-        return hashlib.sha256(password.encode()).hexdigest()
+    def _generate_password(self):
+        chars = string.ascii_letters + string.digits + "!@#$%^&*"
+        return ''.join(random.choices(chars, k=12))
 
-# Project Management Core
+# --- Project Management Core ---
 class ProjectManager:
-    def __init__(self, username):
-        self.auth = AuthSystem()
-        self.username = username
-    
-    def create_project(self, project_name):
-        users = self.auth._load_users()
-        project_id = self._generate_id()
-        edit_pw = self._generate_password()
-        view_pw = self._generate_password()
+    def __init__(self, auth_system):
+        self.auth = auth_system
         
-        users[self.username]['projects'][project_id] = {
+    def create_project(self, username, project_name):
+        if username not in self.auth.users:
+            return False, "User not found"
+        
+        if len(self.auth.users[username]['projects']) >= MAX_PROJECTS_PER_USER:
+            return False, "Project limit reached"
+        
+        project_id = self._generate_id()
+        edit_pw = self.auth._generate_password()
+        view_pw = self.auth._generate_password()
+        
+        self.auth.users[username]['projects'][project_id] = {
             'name': project_name,
-            'edit_pw': self.auth._hash_password(edit_pw),
-            'view_pw': self.auth._hash_password(view_pw),
-            'created_at': datetime.datetime.now().isoformat(),
+            'edit_pw': self.auth._hash(edit_pw),
+            'view_pw': self.auth._hash(view_pw),
+            'created': datetime.now().isoformat(),
             'tasks': [],
-            'milestones': []
+            'milestones': [],
+            'last_modified': datetime.now().isoformat()
         }
-        self.auth._save_users(users)
-        return project_id, edit_pw, view_pw
+        self.auth._save_users()
+        return True, (project_id, edit_pw, view_pw)
     
-    def load_project(self, project_id, password):
-        users = self.auth._load_users()
-        project = users[self.username]['projects'].get(project_id)
+    def get_project(self, username, project_id, password):
+        project = self.auth.users[username]['projects'].get(project_id)
         if not project:
             return False, "Project not found"
-        if project['edit_pw'] == self.auth._hash_password(password):
-            return True, "edit"
-        if project['view_pw'] == self.auth._hash_password(password):
-            return True, "view"
+        
+        if project['edit_pw'] == self.auth._hash(password):
+            return True, 'edit'
+        if project['view_pw'] == self.auth._hash(password):
+            return True, 'view'
         return False, "Invalid password"
     
     def _generate_id(self):
         return ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
-    
-    def _generate_password(self):
-        chars = string.ascii_letters + string.digits + "!@#$%"
-        return ''.join(random.choices(chars, k=12))
 
-# Excel Integration
-class ExcelManager:
+# --- Excel Integration ---
+class ExcelHandler:
     @staticmethod
-    def import_excel(uploaded_file):
+    def parse_excel(uploaded_file):
         try:
-            df_tasks = pd.read_excel(uploaded_file, sheet_name='Tasks')
-            df_milestones = pd.read_excel(uploaded_file, sheet_name='Milestones')
+            tasks = pd.read_excel(uploaded_file, sheet_name='Tasks')
+            milestones = pd.read_excel(uploaded_file, sheet_name='Milestones')
             
-            tasks = []
-            for _, row in df_tasks.iterrows():
-                tasks.append({
-                    'id': str(uuid.uuid4()),
-                    'title': row['Task Title'],
-                    'start': row['Start Date'].strftime('%Y-%m-%d'),
-                    'end': row['End Date'].strftime('%Y-%m-%d'),
-                    'progress': f"{row['Progress']}%",
-                    'owner': row['Owner'],
-                    'wbs': row['WBS']
-                })
+            # Data validation
+            required_columns = {
+                'Tasks': ['WBS', 'TASK TITLE', 'SCHEDULED START', 'SCHEDULED FINISH'],
+                'Milestones': ['Milestones', 'Start Date', 'End Date']
+            }
             
-            milestones = []
-            for _, row in df_milestones.iterrows():
-                milestones.append({
-                    'id': str(uuid.uuid4()),
-                    'name': row['Milestone'],
-                    'date': row['Date'].strftime('%Y-%m-%d'),
-                    'type': row['Type']
-                })
+            for sheet, cols in required_columns.items():
+                if not all(col in tasks.columns for col in cols):
+                    return False, f"Missing columns in {sheet} sheet"
             
-            return True, {'tasks': tasks, 'milestones': milestones}
+            return True, {
+                'tasks': tasks.to_dict('records'),
+                'milestones': milestones.to_dict('records')
+            }
         except Exception as e:
             return False, str(e)
     
     @staticmethod
-    def export_excel(project_data):
+    def generate_excel(project_data):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # Tasks sheet
+            # Format tasks
             tasks_df = pd.DataFrame(project_data['tasks'])
             tasks_df.to_excel(writer, sheet_name='Tasks', index=False)
             
-            # Milestones sheet
+            # Format milestones
             milestones_df = pd.DataFrame(project_data['milestones'])
             milestones_df.to_excel(writer, sheet_name='Milestones', index=False)
+            
+            # Add formatting
+            workbook = writer.book
+            header_format = workbook.add_format({
+                'bold': True,
+                'text_wrap': True,
+                'valign': 'top',
+                'fg_color': '#1E88E5',
+                'font_color': 'white',
+                'border': 1
+            })
+            
+            for sheet in writer.sheets.values():
+                sheet.set_column('A:Z', 20)
+                sheet.write_row(0, 0, tasks_df.columns, header_format)
+        
         output.seek(0)
         return output
 
-# Visualization Engine
-class Visualizer:
+# --- Visualization Engine ---
+class ProjectVisualizer:
     @staticmethod
-    def gantt_chart(tasks):
-        df = pd.DataFrame([{
-            'Task': t['title'],
-            'Start': pd.to_datetime(t['start']),
-            'Finish': pd.to_datetime(t['end']),
-            'Progress': int(t['progress'].strip('%')),
-            'Owner': t['owner']
-        } for t in tasks])
-        
-        fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task",
-                         color="Progress", color_continuous_scale='Blues',
-                         title="Project Timeline")
-        fig.update_yaxes(autorange="reversed")
-        return fig
-    
-    @staticmethod
-    def resource_heatmap(tasks):
-        resources = list(set([t['owner'] for t in tasks if t['owner']]))
-        date_range = pd.date_range(
-            start=min([pd.to_datetime(t['start']) for t in tasks]),
-            end=max([pd.to_datetime(t['end']) for t in tasks])
-        )
-        
-        data = []
-        for date in date_range:
-            if date.weekday() >= 5: continue  # Skip weekends
-            for resource in resources:
-                count = sum(1 for t in tasks 
-                          if t['owner'] == resource and 
-                          pd.to_datetime(t['start']) <= date <= pd.to_datetime(t['end']))
-                data.append({'Date': date, 'Resource': resource, 'Tasks': count})
-        
-        df = pd.DataFrame(data)
-        fig = px.density_heatmap(df, x='Date', y='Resource', z='Tasks',
-                                color_continuous_scale='Viridis',
-                                title="Resource Utilization")
-        fig.update_layout(xaxis_title='Date', yaxis_title='Resource')
-        return fig
-
-# Main Application
-def main():
-    auth = AuthSystem()
-    
-    if 'auth_state' not in st.session_state:
-        st.session_state.auth_state = {
-            'authenticated': False,
-            'current_user': None,
-            'current_project': None,
-            'edit_mode': False
-        }
-    
-    if not st.session_state.auth_state['authenticated']:
-        render_auth_interface(auth)
-    else:
-        render_main_interface(auth)
-
-def render_auth_interface(auth):
-    st.markdown('<div class="main-header">Project Management Suite</div>', unsafe_allow_html=True)
-    
-    tabs = st.tabs(["Login", "Register", "Access Project"])
-    with tabs[0]:
-        with st.form("login"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
-                success, msg = auth.authenticate_user(username, password)
-                if success:
-                    st.session_state.auth_state.update({
-                        'authenticated': True,
-                        'current_user': username
-                    })
-                    st.rerun()
-                else:
-                    st.error(msg)
-    
-    with tabs[1]:
-        with st.form("register"):
-            new_user = st.text_input("New Username")
-            new_pass = st.text_input("Password", type="password")
-            if st.form_submit_button("Register"):
-                success, msg = auth.register_user(new_user, new_pass)
-                if success:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-    
-    with tabs[2]:
-        with st.form("project_access"):
-            proj_user = st.text_input("Username")
-            proj_id = st.text_input("Project ID")
-            proj_pass = st.text_input("Password", type="password")
-            if st.form_submit_button("Access"):
-                # Project access logic
-                pass
-
-def render_main_interface(auth):
-    pm = ProjectManager(st.session_state.auth_state['current_user'])
-    
-    st.sidebar.header("Project Controls")
-    if st.sidebar.button("New Project"):
-        with st.form("new_project"):
-            name = st.text_input("Project Name")
-            if st.form_submit_button("Create"):
-                project_id, edit_pw, view_pw = pm.create_project(name)
-                st.success(f"Project created! Edit Password: {edit_pw} | View Password: {view_pw}")
-    
-    if st.session_state.auth_state['current_project']:
-        render_project_workspace(pm)
-    else:
-        render_project_selection(pm)
-
-def render_project_selection(pm):
-    st.header("Your Projects")
-    users = pm.auth._load_users()
-    projects = users[pm.username]['projects']
-    
-    for pid, project in projects.items():
-        with st.expander(f"{project['name']} ({pid})"):
-            col1, col2 = st.columns(2)
-            with col1:
-                mode = st.radio("Mode", ["Edit", "View"], key=f"mode_{pid}")
-                password = st.text_input("Password", type="password", key=f"pw_{pid}")
+    def create_gantt(tasks):
+        try:
+            df = pd.DataFrame([{
+                'Task': task['TASK TITLE'],
+                'Start': pd.to_datetime(task['SCHEDULED START']),
+                'Finish': pd.to_datetime(task['SCHEDULED FINISH']),
+                'Progress': int(task.get('PCT OF TASK COMPLETE', 0)),
+                'Owner': task.get('TASK OWNER', ''),
+                'WBS': task.get('WBS', '')
+            } for task in tasks])
             
-            with col2:
-                if st.button("Load", key=f"load_{pid}"):
-                    success, result = pm.load_project(pid, password)
-                    if success:
-                        st.session_state.auth_state.update({
-                            'current_project': pid,
-                            'edit_mode': (result == "edit")
-                        })
+            fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task",
+                             color="Progress", color_continuous_scale='Blues',
+                             hover_data=['Owner', 'WBS'],
+                             title="Project Gantt Chart")
+            fig.update_yaxes(autorange="reversed")
+            fig.update_layout(height=600)
+            return fig
+        except Exception as e:
+            st.error(f"Error generating Gantt: {str(e)}")
+            return None
+    
+    @staticmethod
+    def create_resource_heatmap(tasks):
+        try:
+            resources = list(set([t.get('TASK OWNER') for t in tasks if t.get('TASK OWNER')]))
+            date_range = pd.date_range(
+                start=min([pd.to_datetime(t['SCHEDULED START']) for t in tasks]),
+                end=max([pd.to_datetime(t['SCHEDULED FINISH']) for t in tasks])
+            )
+            
+            data = []
+            for date in date_range:
+                if date.weekday() >= 5: continue  # Skip weekends
+                for resource in resources:
+                    count = sum(1 for t in tasks 
+                              if t.get('TASK OWNER') == resource and 
+                              pd.to_datetime(t['SCHEDULED START']) <= date <= pd.to_datetime(t['SCHEDULED FINISH']))
+                    data.append({'Date': date, 'Resource': resource, 'Tasks': count})
+            
+            df = pd.DataFrame(data)
+            fig = px.density_heatmap(df, x='Date', y='Resource', z='Tasks',
+                                    color_continuous_scale='Viridis',
+                                    title="Resource Utilization (Excluding Weekends)")
+            fig.update_layout(height=600)
+            return fig
+        except Exception as e:
+            st.error(f"Error generating heatmap: {str(e)}")
+            return None
+
+# --- UI Components ---
+def auth_gate():
+    st.markdown("""
+    <style>
+        .auth-container {
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .auth-header {
+            font-size: 2rem;
+            color: #1E88E5;
+            margin-bottom: 1.5rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    with st.container():
+        st.markdown('<div class="auth-container">', unsafe_allow_html=True)
+        st.markdown('<div class="auth-header">Project Management Suite</div>', unsafe_allow_html=True)
+        
+        tab1, tab2, tab3 = st.tabs(["Login", "Register", "Access Project"])
+        
+        with tab1:
+            with st.form("login_form"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                if st.form_submit_button("Login"):
+                    auth = AuthSystem()
+                    if auth.authenticate(username, password):
+                        st.session_state.auth = {
+                            'user': username,
+                            'time': datetime.now(),
+                            'projects': auth.users[username]['projects']
+                        }
                         st.rerun()
                     else:
                         st.error("Invalid credentials")
+        
+        with tab2:
+            with st.form("register_form"):
+                new_user = st.text_input("New Username")
+                if st.form_submit_button("Create Account"):
+                    auth = AuthSystem()
+                    success, password = auth.create_user(new_user)
+                    if success:
+                        st.success(f"Account created! Password: {password}")
+                    else:
+                        st.error("Username already exists")
+        
+        with tab3:
+            with st.form("project_access"):
+                proj_user = st.text_input("Username")
+                proj_id = st.text_input("Project ID")
+                proj_pass = st.text_input("Password", type="password")
+                if st.form_submit_button("Access Project"):
+                    auth = AuthSystem()
+                    pm = ProjectManager(auth)
+                    valid, mode = pm.get_project(proj_user, proj_id, proj_pass)
+                    if valid:
+                        st.session_state.auth = {
+                            'user': proj_user,
+                            'project_id': proj_id,
+                            'mode': mode,
+                            'time': datetime.now()
+                        }
+                        st.rerun()
+                    else:
+                        st.error("Invalid project access credentials")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
-def render_project_workspace(pm):
-    project_data = pm.auth._load_users()[pm.username]['projects'][
-        st.session_state.auth_state['current_project']]
+# --- Main Application ---
+def main_app():
+    # Session timeout check
+    if (datetime.now() - st.session_state.auth['time']).seconds > SESSION_TIMEOUT:
+        st.error("Session expired")
+        del st.session_state.auth
+        st.rerun()
     
-    st.header(f"Project: {project_data['name']}")
+    auth = AuthSystem()
+    pm = ProjectManager(auth)
+    visualizer = ProjectVisualizer()
     
-    tabs = st.tabs(["Plan", "Resources", "Analytics", "Gantt", "Settings"])
+    # Sidebar controls
+    with st.sidebar:
+        st.header(f"Welcome, {st.session_state.auth['user']}")
+        st.write(f"Access mode: {st.session_state.auth.get('mode', 'full')}")
+        
+        if st.button("Logout"):
+            del st.session_state.auth
+            st.rerun()
+        
+        if 'project_id' not in st.session_state.auth:
+            with st.form("new_project"):
+                project_name = st.text_input("New Project Name")
+                if st.form_submit_button("Create Project"):
+                    success, (pid, epw, vpw) = pm.create_project(
+                        st.session_state.auth['user'], 
+                        project_name
+                    )
+                    if success:
+                        st.session_state.auth['project_id'] = pid
+                        st.success(f"Created! Edit PW: {epw} | View PW: {vpw}")
+                        st.rerun()
     
-    with tabs[0]:
-        handle_excel_operations(project_data)
-    
-    with tabs[1]:
-        st.plotly_chart(Visualizer.resource_heatmap(project_data['tasks']))
-    
-    with tabs[2]:
+    # Main interface
+    if 'project_id' in st.session_state.auth:
+        current_project = auth.users[st.session_state.auth['user']]['projects'][
+            st.session_state.auth['project_id']]
+        
+        # Excel operations
         col1, col2 = st.columns(2)
         with col1:
-            st.plotly_chart(Visualizer.gantt_chart(project_data['tasks']))
+            uploaded_file = st.file_uploader("Upload Excel Plan", type=["xlsx"])
+            if uploaded_file:
+                success, data = ExcelHandler.parse_excel(uploaded_file)
+                if success:
+                    current_project.update(data)
+                    auth._save_users()
+                    st.success("Project data updated!")
+                else:
+                    st.error(f"Error: {data}")
+        
         with col2:
-            # Analytics components
-            pass
-    
-    with tabs[3]:
-        st.plotly_chart(Visualizer.gantt_chart(project_data['tasks']))
-    
-    with tabs[4]:
-        st.write("Project Settings")
-        st.write(f"Edit Password: {project_data['edit_pw']}")
-        st.write(f"View Password: {project_data['view_pw']}")
-
-def handle_excel_operations(project_data):
-    col1, col2 = st.columns(2)
-    with col1:
-        uploaded_file = st.file_uploader("Upload Excel", type=["xlsx"])
-        if uploaded_file:
-            success, data = ExcelManager.import_excel(uploaded_file)
-            if success:
-                project_data.update(data)
-                st.success("Data imported!")
-    
-    with col2:
-        if st.button("Export to Excel"):
-            excel_data = ExcelManager.export_excel(project_data)
-            st.download_button(
+            if st.download_button(
                 label="Download Excel",
-                data=excel_data,
+                data=ExcelHandler.generate_excel(current_project).getvalue(),
                 file_name="project_plan.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ):
+                st.success("Excel file generated")
+        
+        # Project visualization
+        tab1, tab2, tab3 = st.tabs(["Gantt Chart", "Resource Utilization", "Details"])
+        
+        with tab1:
+            fig = visualizer.create_gantt(current_project['tasks'])
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with tab2:
+            fig = visualizer.create_resource_heatmap(current_project['tasks'])
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with tab3:
+            st.data_editor(
+                pd.DataFrame(current_project['tasks']),
+                num_rows="dynamic",
+                use_container_width=True,
+                disabled=(st.session_state.auth.get('mode', 'edit') != 'edit')
             )
+    else:
+        st.header("Your Projects")
+        projects = auth.users[st.session_state.auth['user']]['projects']
+        
+        for pid, project in projects.items():
+            with st.expander(f"{project['name']} ({pid})"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    password = st.text_input("Password", type="password", key=f"pw_{pid}")
+                with col2:
+                    if st.button("Open", key=f"open_{pid}"):
+                        valid, mode = pm.get_project(
+                            st.session_state.auth['user'],
+                            pid,
+                            password
+                        )
+                        if valid:
+                            st.session_state.auth.update({
+                                'project_id': pid,
+                                'mode': mode
+                            })
+                            st.rerun()
+                        else:
+                            st.error("Invalid password")
 
+# --- Main Flow ---
 if __name__ == "__main__":
-    main()
+    st.set_page_config(layout="wide")
+    
+    if 'auth' not in st.session_state:
+        auth_gate()
+    else:
+        main_app()
