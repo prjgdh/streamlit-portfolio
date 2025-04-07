@@ -1383,7 +1383,6 @@ def main():
                             st.session_state.edit_mode = True
                             load_project_data(st.session_state.username, result['project_id'])
                             
-                            # Add a button to go to the project after creation
                             if st.button("Go to Project"):
                                 st.experimental_rerun()
                         else:
