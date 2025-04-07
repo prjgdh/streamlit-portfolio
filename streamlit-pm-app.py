@@ -807,6 +807,190 @@ def main():
                         st.session_state.username = login_username
                         st.success(message)
                         st.experimental_rerun()
+                    else:
+                        st.error(message)
+                else:
+                    st.warning("Please enter both username and password")
+        
+        with auth_tabs[1]:  # Register tab
+            st.subheader("Register")
+            reg_username = st.text_input("Username", key="reg_username")
+            reg_password = st.text_input("Password", type="password", key="reg_password")
+            
+            if st.button("Register", key="register_button"):
+                if reg_username and reg_password:
+                    success, message = register_user(reg_username, reg_password)
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(message)
+                else:
+                    st.warning("Please enter both username and password")
+        
+        with auth_tabs[2]:  # Project Access tab
+            st.subheader("Project Access")
+            proj_username = st.text_input("Username", key="proj_username")
+            proj_id = st.text_input("Project ID", key="proj_id")
+            proj_password = st.text_input("Password (Edit or View)", type="password", key="proj_password")
+            
+            if st.button("Access Project", key="project_access_button"):
+                if proj_username and proj_id and proj_password:
+                    # Try edit mode first
+                    success, message = authenticate_project(proj_username, proj_id, proj_password, mode='edit')
+                    if success:
+                        st.session_state.username = proj_username
+                        st.session_state.edit_mode = True
+                        load_project_data(proj_username, proj_id)
+                        st.success("Project loaded in edit mode")
+                        st.experimental_rerun()
+                    else:
+                        # Try view mode
+                        success, message = authenticate_project(proj_username, proj_id, proj_password, mode='view')
+                        if success:
+                            st.session_state.username = proj_username
+                            st.session_state.edit_mode = False
+                            load_project_data(proj_username, proj_id)
+                            st.success("Project loaded in view mode")
+                            st.experimental_rerun()
+                        else:
+                            st.error(message)
+                else:
+                    st.warning("Please enter username, project ID, and password")
+        
+        # Information note
+        st.markdown("""
+        <div class="highlight">
+        <strong>Note:</strong> When you create a project, two passwords will be generated:
+        <ul>
+            <li>An edit password for full access</li>
+            <li>A view password for read-only access</li>
+        </ul>
+        Please save these passwords, as they cannot be recovered if lost.
+        </div>
+        """, unsafe_allow_html=True)
+            
+    else:
+        # User is logged in
+        st.sidebar.success(f"Logged in as: {st.session_state.username}")
+        if st.sidebar.button("Logout"):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            st.session_state.current_project = None
+            st.session_state.tasks = []
+            st.session_state.milestones = []
+            st.session_state.edit_mode = False
+            st.experimental_rerun()
+        
+        # Check if a project is loaded
+        if st.session_state.current_project is not None:
+            st.sidebar.info(f"Current Project: {st.session_state.current_project['name']}")
+            st.sidebar.info(f"Mode: {'Edit' if st.session_state.edit_mode else 'View'}")
+            
+            # Main project section
+            st.markdown(f'<div class="sub-header">{st.session_state.current_project["name"]}</div>', unsafe_allow_html=True)
+            
+            # Project tabs
+            project_tabs = st.tabs(["Project Plan", "Resource Utilization", "Analytics", "Gantt Chart", "Settings"])
+            
+            with project_tabs[0]:  # Project Plan tab
+                st.subheader("Project Plan")
+                
+                # Project plan actions
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.session_state.edit_mode and st.button("Add Task"):
+                        st.session_state.add_task = True
+                
+                with col2:
+                    if st.session_state.edit_mode and st.button("Add Milestone"):
+                        st.session_state.add_milestone = True
+                
+                with col3:
+                    if st.session_state.edit_mode:
+                        upload_file = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="project_plan_upload")
+                        if upload_file:
+                            success, message = process_uploaded_excel(upload_file)
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
+                
+                # Task addition form
+                if st.session_state.edit_mode and 'add_task' in st.session_state and st.session_state.add_task:
+                    st.subheader("Add New Task")
+                    
+                    # Create WBS options
+                    wbs_options = ["1"]
+                    for task in st.session_state.tasks:
+                        wbs_parts = task['wbs'].split('.')
+                        if len(wbs_parts) == 1:
+                            wbs_options.append(f"{task['wbs']}.1")
+                    
+                    task_wbs = st.selectbox("WBS", wbs_options)
+                    task_title = st.text_input("Task Title")
+                    task_desc = st.text_area("Task Description")
+                    task_deps = st.text_input("Dependencies")
+                    task_owner = st.text_input("Task Owner")
+                    task_completion = st.slider("Completion (%)", 0, 100, 0)
+                    task_start = st.date_input("Scheduled Start")
+                    task_finish = st.date_input("Scheduled Finish")
+                    task_duration = st.number_input("Duration (days)", min_value=1, value=1)
+                    
+                    if st.button("Save Task"):
+                        new_task = {
+                            'id': str(len(st.session_state.tasks) + 1),
+                            'wbs': task_wbs,
+                            'title': task_title,
+                            'description': task_desc,
+                            'dependencies': task_deps,
+                            'owner': task_owner,
+                            'completion': f"{task_completion}%",
+                            'scheduled_start': format_date(task_start),
+                            'scheduled_finish': format_date(task_finish),
+                            'actual_start': '',
+                            'actual_finish': '',
+                            'finish_variance': '',
+                            'duration': str(task_duration)
+                        }
+                        
+                        st.session_state.tasks.append(new_task)
+                        save_project_data()
+                        st.session_state.add_task = False
+                        st.success("Task added successfully")
+                        st.experimental_rerun()
+                    
+                    if st.button("Cancel"):
+                        st.session_state.add_task = False
+                        st.experimental_rerun()
+                
+                # Milestone addition form
+                if st.session_state.edit_mode and 'add_milestone' in st.session_state and st.session_state.add_milestone:
+                    st.subheader("Add New Milestone")
+                    
+                    ms_name = st.text_input("Milestone Name")
+                    ms_start = st.date_input("Start Date")
+                    ms_end = st.date_input("End Date")
+                    ms_key = st.text_input("Key Milestone Description")
+                    
+                    if st.button("Save Milestone"):
+                        new_milestone = {
+                            'id': str(len(st.session_state.milestones) + 1),
+                            'name': ms_name,
+                            'start_date': format_date(ms_start),
+                            'end_date': format_date(ms_end),
+                            'key_milestone': ms_key
+                        }
+                        
+                        st.session_state.milestones.append(new_milestone)
+                        save_project_data()
+                        st.session_state.add_milestone = False
+                        st.success("Milestone added successfully")
+                        st.experimental_rerun()
+                    
+                    if st.button("Cancel", key="cancel_milestone"):
+                        st.session_state.add_milestone = False
+                        st.experimental_rerun()
                 
                 # Display tasks
                 st.subheader("Tasks")
@@ -1062,7 +1246,7 @@ def main():
                 1. Your username
                 2. The Project ID
                 3. The appropriate password (Edit or View)
-                """)
+                """
                 
                 # Export/Import project
                 st.markdown("### Export/Import Project")
@@ -1099,7 +1283,6 @@ def main():
                             st.experimental_rerun()
                         except Exception as e:
                             st.error(f"Error importing project data: {str(e)}")
-        
         else:
             # No project loaded, show project creation/selection
             st.markdown('<div class="sub-header">Project Dashboard</div>', unsafe_allow_html=True)
@@ -1200,6 +1383,7 @@ def main():
                             st.session_state.edit_mode = True
                             load_project_data(st.session_state.username, result['project_id'])
                             
+                            # Add a button to go to the project after creation
                             if st.button("Go to Project"):
                                 st.experimental_rerun()
                         else:
@@ -1208,188 +1392,4 @@ def main():
                         st.warning("Please enter a project name")
 
 if __name__ == "__main__":
-    main()
-                    else:
-                        st.error(message)
-                else:
-                    st.warning("Please enter both username and password")
-        
-        with auth_tabs[1]:  # Register tab
-            st.subheader("Register")
-            reg_username = st.text_input("Username", key="reg_username")
-            reg_password = st.text_input("Password", type="password", key="reg_password")
-            
-            if st.button("Register", key="register_button"):
-                if reg_username and reg_password:
-                    success, message = register_user(reg_username, reg_password)
-                    if success:
-                        st.success(message)
-                    else:
-                        st.error(message)
-                else:
-                    st.warning("Please enter both username and password")
-        
-        with auth_tabs[2]:  # Project Access tab
-            st.subheader("Project Access")
-            proj_username = st.text_input("Username", key="proj_username")
-            proj_id = st.text_input("Project ID", key="proj_id")
-            proj_password = st.text_input("Password (Edit or View)", type="password", key="proj_password")
-            
-            if st.button("Access Project", key="project_access_button"):
-                if proj_username and proj_id and proj_password:
-                    # Try edit mode first
-                    success, message = authenticate_project(proj_username, proj_id, proj_password, mode='edit')
-                    if success:
-                        st.session_state.username = proj_username
-                        st.session_state.edit_mode = True
-                        load_project_data(proj_username, proj_id)
-                        st.success("Project loaded in edit mode")
-                        st.experimental_rerun()
-                    else:
-                        # Try view mode
-                        success, message = authenticate_project(proj_username, proj_id, proj_password, mode='view')
-                        if success:
-                            st.session_state.username = proj_username
-                            st.session_state.edit_mode = False
-                            load_project_data(proj_username, proj_id)
-                            st.success("Project loaded in view mode")
-                            st.experimental_rerun()
-                        else:
-                            st.error(message)
-                else:
-                    st.warning("Please enter username, project ID, and password")
-        
-        # Information note
-        st.markdown("""
-        <div class="highlight">
-        <strong>Note:</strong> When you create a project, two passwords will be generated:
-        <ul>
-            <li>An edit password for full access</li>
-            <li>A view password for read-only access</li>
-        </ul>
-        Please save these passwords, as they cannot be recovered if lost.
-        </div>
-        """, unsafe_allow_html=True)
-            
-    else:
-        # User is logged in
-        st.sidebar.success(f"Logged in as: {st.session_state.username}")
-        if st.sidebar.button("Logout"):
-            st.session_state.logged_in = False
-            st.session_state.username = None
-            st.session_state.current_project = None
-            st.session_state.tasks = []
-            st.session_state.milestones = []
-            st.session_state.edit_mode = False
-            st.experimental_rerun()
-        
-        # Check if a project is loaded
-        if st.session_state.current_project is not None:
-            st.sidebar.info(f"Current Project: {st.session_state.current_project['name']}")
-            st.sidebar.info(f"Mode: {'Edit' if st.session_state.edit_mode else 'View'}")
-            
-            # Main project section
-            st.markdown(f'<div class="sub-header">{st.session_state.current_project["name"]}</div>', unsafe_allow_html=True)
-            
-            # Project tabs
-            project_tabs = st.tabs(["Project Plan", "Resource Utilization", "Analytics", "Gantt Chart", "Settings"])
-            
-            with project_tabs[0]:  # Project Plan tab
-                st.subheader("Project Plan")
-                
-                # Project plan actions
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    if st.session_state.edit_mode and st.button("Add Task"):
-                        st.session_state.add_task = True
-                
-                with col2:
-                    if st.session_state.edit_mode and st.button("Add Milestone"):
-                        st.session_state.add_milestone = True
-                
-                with col3:
-                    if st.session_state.edit_mode:
-                        upload_file = st.file_uploader("Upload Excel", type=["xlsx", "xls"], key="project_plan_upload")
-                        if upload_file:
-                            success, message = process_uploaded_excel(upload_file)
-                            if success:
-                                st.success(message)
-                            else:
-                                st.error(message)
-                
-                # Task addition form
-                if st.session_state.edit_mode and 'add_task' in st.session_state and st.session_state.add_task:
-                    st.subheader("Add New Task")
-                    
-                    # Create WBS options
-                    wbs_options = ["1"]
-                    for task in st.session_state.tasks:
-                        wbs_parts = task['wbs'].split('.')
-                        if len(wbs_parts) == 1:
-                            wbs_options.append(f"{task['wbs']}.1")
-                    
-                    task_wbs = st.selectbox("WBS", wbs_options)
-                    task_title = st.text_input("Task Title")
-                    task_desc = st.text_area("Task Description")
-                    task_deps = st.text_input("Dependencies")
-                    task_owner = st.text_input("Task Owner")
-                    task_completion = st.slider("Completion (%)", 0, 100, 0)
-                    task_start = st.date_input("Scheduled Start")
-                    task_finish = st.date_input("Scheduled Finish")
-                    task_duration = st.number_input("Duration (days)", min_value=1, value=1)
-                    
-                    if st.button("Save Task"):
-                        new_task = {
-                            'id': str(len(st.session_state.tasks) + 1),
-                            'wbs': task_wbs,
-                            'title': task_title,
-                            'description': task_desc,
-                            'dependencies': task_deps,
-                            'owner': task_owner,
-                            'completion': f"{task_completion}%",
-                            'scheduled_start': format_date(task_start),
-                            'scheduled_finish': format_date(task_finish),
-                            'actual_start': '',
-                            'actual_finish': '',
-                            'finish_variance': '',
-                            'duration': str(task_duration)
-                        }
-                        
-                        st.session_state.tasks.append(new_task)
-                        save_project_data()
-                        st.session_state.add_task = False
-                        st.success("Task added successfully")
-                        st.experimental_rerun()
-                    
-                    if st.button("Cancel"):
-                        st.session_state.add_task = False
-                        st.experimental_rerun()
-                
-                # Milestone addition form
-                if st.session_state.edit_mode and 'add_milestone' in st.session_state and st.session_state.add_milestone:
-                    st.subheader("Add New Milestone")
-                    
-                    ms_name = st.text_input("Milestone Name")
-                    ms_start = st.date_input("Start Date")
-                    ms_end = st.date_input("End Date")
-                    ms_key = st.text_input("Key Milestone Description")
-                    
-                    if st.button("Save Milestone"):
-                        new_milestone = {
-                            'id': str(len(st.session_state.milestones) + 1),
-                            'name': ms_name,
-                            'start_date': format_date(ms_start),
-                            'end_date': format_date(ms_end),
-                            'key_milestone': ms_key
-                        }
-                        
-                        st.session_state.milestones.append(new_milestone)
-                        save_project_data()
-                        st.session_state.add_milestone = False
-                        st.success("Milestone added successfully")
-                        st.experimental_rerun()
-                    
-                    if st.button("Cancel", key="cancel_milestone"):
-                        st.session_state.add_milestone = False
-                        st.experimental_rerun()
+    main())
