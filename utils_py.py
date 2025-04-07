@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import datetime
-from project import save_project_data
+from project_py import save_project_data
 
 def parse_date(date_str):
     """Parse date string in various formats"""

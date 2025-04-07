@@ -1,5 +1,5 @@
 import streamlit as st
-from auth import user_exists, save_users
+from auth_py import user_exists, save_users
 
 # Functions for project data management
 def init_project_data():

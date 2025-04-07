@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from utils import parse_date
+from utils_py import parse_date
 
 # Functions for Gantt chart generation
 def create_gantt_chart(tasks, level=1, parent_wbs=None):

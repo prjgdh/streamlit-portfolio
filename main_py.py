@@ -5,15 +5,17 @@ import datetime
 import base64
 import json
 import os
+import sys
+
+# Add the current directory to the path so Python can find our modules
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import custom modules
-from auth import init_users, login_user, register_user, user_exists, authenticate_project
-from project import (init_project_data, load_project_data, save_project_data, 
-                   create_project, get_user_projects)
-from utils import process_uploaded_excel, export_to_excel
-from visualization import (create_gantt_chart, create_resource_utilization_chart, 
-                         create_task_completion_chart, create_milestone_timeline)
-from styles import load_css
+from auth_py import init_users, login_user, register_user, user_exists, authenticate_project, create_project, get_user_projects
+from project_py import init_project_data, load_project_data, save_project_data
+from utils_py import process_uploaded_excel, export_to_excel, parse_date
+from visualization_py import create_gantt_chart, create_resource_utilization_chart, create_task_completion_chart, create_milestone_timeline
+from styles_py import load_css
 
 # Set page config
 st.set_page_config(
